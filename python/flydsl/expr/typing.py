@@ -165,9 +165,10 @@ def default_f8_type() -> ir.Type:
     - gfx12*: FP8 E4M3FN (OCP)
     - gfx94* (MI300): FP8 E4M3FNUZ
 
-    Raises ``RuntimeError`` on gfx11* (RDNA3/RDNA3.5): these chips have no
-    native FP8 instructions, so FP8 compute would surface as a late LLVM
-    "cannot select" error. Fail early with a clear message instead.
+    Raises ``RuntimeError`` on any other arch (e.g. gfx11* RDNA3/RDNA3.5, or
+    gfx90a/gfx908 CDNA2/CDNA1): these chips have no native FP8 instructions, so
+    FP8 compute would otherwise surface as a late LLVM "cannot select" error or
+    a GPU fault at dispatch. Fail early with a clear message instead.
     """
     arch = ""
     try:
@@ -176,14 +177,14 @@ def default_f8_type() -> ir.Type:
         arch = ""
     if "gfx95" in arch or "gfx12" in arch:
         return Float8E4M3FN.ir_type
-    if arch.startswith("gfx11"):
-        raise RuntimeError(
-            f"default_f8_type(): no native FP8 support on {arch}; "
-            "FP8 instructions are available on gfx94*, gfx95*, and gfx12*. "
-            "Use bf16/f16 GEMM via "
-            "`rdna3_f16_gemm.create_wmma_gemm_module` on gfx11* targets."
-        )
-    return Float8E4M3FNUZ.ir_type
+    if arch.startswith("gfx94"):
+        return Float8E4M3FNUZ.ir_type
+    raise RuntimeError(
+        f"default_f8_type(): no native FP8 support on {arch!r}; "
+        "FP8 instructions are available on gfx94*, gfx95*, and gfx12*. "
+        "Use bf16/f16 GEMM (e.g. `rdna3_f16_gemm.create_wmma_gemm_module` on "
+        "gfx11* targets) instead."
+    )
 
 
 class Types:
