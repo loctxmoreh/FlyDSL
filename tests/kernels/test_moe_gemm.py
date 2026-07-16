@@ -2312,6 +2312,9 @@ def test_moe_stage2_standalone(
     3. Reduce mode (FlyDSL): GEMM2 + FlyDSL reduce kernel
     For FP4 / A8W4: atomic mode + torch reduce mode (MXFP4 weight path).
     """
+    # fp8 stage2 uses fp8 MFMA (CDNA3+); gfx90a/gfx908 lack it.
+    if in_dtype == "fp8" and not (str(ARCH).startswith("gfx942") or str(ARCH).startswith("gfx95")):
+        pytest.skip(f"fp8 MoE stage2 requires gfx942/gfx950 (FP8 MFMA), not {ARCH}")
     is_fp4_path = in_dtype in ("fp4", "a8w4")
     if is_fp4_path:
         from tests.kernels.utils import gemm_common_utils
