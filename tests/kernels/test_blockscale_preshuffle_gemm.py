@@ -38,6 +38,9 @@ if not torch.cuda.is_available():
     pytest.skip("CUDA/ROCm not available. Skipping GPU tests.", allow_module_level=True)
 
 ARCH = get_rocm_arch()
+if not (str(ARCH).startswith("gfx942") or str(ARCH).startswith("gfx95")):
+    # FP8 MFMA is CDNA3+ only; earlier CDNA (gfx90a/gfx908) has no FP8 GEMM path.
+    pytest.skip(f"blockscale (fp8) GEMM requires gfx942/gfx950, not {ARCH}", allow_module_level=True)
 DTYPE_FP8 = torch.float8_e4m3fn if "gfx95" in ARCH else torch.float8_e4m3fnuz
 
 BLOCK_SHAPE = (128, 128)  # (block_n, block_k)

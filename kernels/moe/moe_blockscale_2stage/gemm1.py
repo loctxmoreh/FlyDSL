@@ -68,6 +68,9 @@ def compile_moe_blockscale_gemm1(
 
     gpu_arch = get_rocm_arch()
     _is_gfx950 = str(gpu_arch).startswith("gfx95")
+    # FP8 MFMA is CDNA3+ only; earlier CDNA (gfx90a/gfx908) would fault the GPU.
+    if not (str(gpu_arch).startswith("gfx942") or _is_gfx950):
+        raise ValueError(f"blockscale MoE GEMM requires FP8 MFMA (gfx942/gfx950), got {gpu_arch!r}")
     allocator = SmemAllocator(None, arch=gpu_arch)
     _state = {}
 

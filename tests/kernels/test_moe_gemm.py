@@ -1777,6 +1777,16 @@ def test_moe_gemm_2stage(
     """
     if (not bool(use_reduce)) and bool(use_valid_mask):
         pytest.skip("valid_mask is only used in reduce mode (atomic mode ignores it).")
+    # 8-bit MoE (fp8/int8/int8smooth/int4-W4A8) uses K=32 fp8/i8 MFMA, a CDNA3+
+    # instruction; earlier CDNA (gfx90a/gfx908) lacks it. f16/bf16/int4_bf16 (bf16
+    # MMA) still run. Tier 1 may enable more of these.
+    if in_dtype not in ("fp16", "bf16", "int4_bf16") and not (
+        str(ARCH).startswith("gfx942") or str(ARCH).startswith("gfx95")
+    ):
+        pytest.skip(f"{in_dtype} MoE GEMM requires gfx942/gfx950 (8-bit MFMA), not {ARCH}")
+    # bf16 output needs packed bf16 global atomics (gfx94+/gfx95+/gfx12+); gfx90a lacks them.
+    if str(out_dtype).strip().lower() == "bf16" and not str(ARCH).startswith(("gfx94", "gfx95", "gfx12")):
+        pytest.skip(f"bf16-output MoE requires bf16 global atomics (gfx94+/gfx95+/gfx12+), not {ARCH}")
     out_s = str(out_dtype).strip().lower()
     if bool(use_reduce) and out_s in ("f32", "fp32", "float"):
         pytest.skip("reduce mode does not support out_dtype='f32' (compile_moe_gemm2(accumulate=False) forbids it).")

@@ -45,6 +45,9 @@ logging.basicConfig(level=logging.INFO)
 logging.getLogger("aiter").setLevel(logging.ERROR)
 
 ARCH = get_rocm_arch()
+if not (str(ARCH).startswith("gfx942") or str(ARCH).startswith("gfx95")):
+    # FP8 MFMA is CDNA3+ only; earlier CDNA (gfx90a/gfx908) has no FP8 MoE path.
+    pytest.skip(f"blockscale (fp8) MoE GEMM requires gfx942/gfx950, not {ARCH}", allow_module_level=True)
 DTYPE_FP8 = torch.float8_e4m3fn if "gfx95" in ARCH else torch.float8_e4m3fnuz
 
 try:

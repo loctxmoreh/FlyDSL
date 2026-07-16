@@ -69,6 +69,10 @@ def compile_blockscale_preshuffle_gemm(
     _is_gfx950 = str(gpu_arch).startswith("gfx95")
     _is_gfx942 = str(gpu_arch).startswith("gfx942")
 
+    # FP8 MFMA is CDNA3+ only; earlier CDNA (gfx90a/gfx908) would fault the GPU.
+    if not (_is_gfx942 or _is_gfx950):
+        raise ValueError(f"blockscale preshuffle GEMM requires FP8 MFMA (gfx942/gfx950), got {gpu_arch!r}")
+
     if use_async_copy and gpu_arch not in ("gfx942", "gfx950"):
         raise ValueError(f"async copy not supported on {gpu_arch}")
 

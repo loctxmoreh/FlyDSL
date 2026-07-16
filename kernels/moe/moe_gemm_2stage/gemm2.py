@@ -113,6 +113,10 @@ def compile_moe_gemm2(
     is_f16_or_bf16 = is_f16 or is_bf16
     needs_scale_w = (not is_f16_or_bf16) or is_int4_bf16
     elem_bytes = 2 if is_f16_or_bf16 else 1
+    # The 8-bit path (fp8/int8/int4-W4A8/int8smooth) uses K=32 fp8/i8 MFMA, a
+    # CDNA3+ instruction; earlier CDNA (gfx90a/gfx908) would fault the GPU.
+    if (not is_f16_or_bf16) and not (str(gpu_arch).startswith("gfx942") or str(gpu_arch).startswith("gfx95")):
+        raise ValueError(f"MoE GEMM in_dtype={in_dtype!r} (8-bit) requires K=32 MFMA (gfx942/gfx950), got {gpu_arch!r}")
     out_s = str(out_dtype).strip().lower()
     if out_s not in ("f16", "fp16", "half", "bf16", "bfloat16", "f32", "fp32", "float"):
         raise ValueError(f"out_dtype must be 'f16', 'bf16', or 'f32', got {out_dtype!r}")
