@@ -142,6 +142,8 @@ def compile_moe_blockscale_gemm2(
     lds_stride = tile_k + pad_k
     # gfx950+ has buffer_atomic_pk_add_bf16 → bf16 can use buffer atomics (same as f16).
     # gfx942 only has global_atomic_pk_add_bf16 → must use global atomics with raw pointer.
+    # Earlier CDNA (gfx90a/gfx908) has NEITHER packed bf16 atomic → bf16 output is
+    # rejected by the guard below (and this fp8 kernel already fail-fasts on gfx90a).
     _has_buffer_atomic_bf16 = str(gpu_arch).startswith(("gfx95", "gfx12"))
     _needs_global_atomic_bf16 = out_is_bf16 and not _has_buffer_atomic_bf16
     if out_is_bf16:
