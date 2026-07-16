@@ -21,7 +21,7 @@ from flydsl.expr import (
     vector,
 )
 from flydsl.expr.typing import T
-from flydsl.runtime.device import get_rocm_arch
+from flydsl.runtime.device import get_rocm_arch, is_cdna4
 from flydsl.utils.smem_allocator import SMEM_CAPACITY_MAP, SmemAllocator, SmemPtr
 from kernels.common.kernels_common import get_llvm_ptr
 from kernels.common.tensor_shim import GTensor, STensor, get_dtype_in_kernel
@@ -126,7 +126,9 @@ def compile_hgemm_kernel(
     assert BLOCK_K >= 32
 
     GPU_ARCH = get_rocm_arch()
-    if GPU_ARCH == "gfx942":
+    # K=32 MFMA + 16B buffer_load_dwordx4_lds are CDNA4-only; every earlier CDNA
+    # (gfx942, gfx90a, ...) uses the K=16 / 4B path.
+    if not is_cdna4(GPU_ARCH):
         WMMA_IMPL = WmmaHalf_m16n16k16(dtype)
         DMA_BYTES = 4
         MFMA_PER_WARP_K = 2

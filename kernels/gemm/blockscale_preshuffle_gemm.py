@@ -88,7 +88,8 @@ def compile_blockscale_preshuffle_gemm(
         a_load_bytes = 4
     else:
         raise ValueError(f"bytes_per_thread_a ({bytes_per_thread_a}) must be divisible by 4")
-    a_async_load_bytes = 4 if _is_gfx942 else 16
+    # 16B buffer_load_dwordx4_lds is CDNA4-only; earlier CDNA (gfx942, gfx90a) uses 4B.
+    a_async_load_bytes = 16 if _is_gfx950 else 4
     a_async_load_dword = a_async_load_bytes // 4
 
     bytes_b_per_tile = tile_n * tile_k * elem_bytes

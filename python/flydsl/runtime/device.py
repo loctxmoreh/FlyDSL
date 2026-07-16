@@ -91,3 +91,32 @@ def is_rdna_arch(arch: Optional[str] = None) -> bool:
     if arch.startswith("gfx120"):
         return True
     return False
+
+
+def is_cdna3(arch: Optional[str] = None) -> bool:
+    """Check if architecture is CDNA3 (gfx94*, e.g. MI300 series).
+
+    If arch is None, the current GPU arch is auto-detected.
+    """
+    if arch is None:
+        arch = get_rocm_arch()
+    if not arch:
+        return False
+    return arch.lower().startswith("gfx94")
+
+
+def is_cdna4(arch: Optional[str] = None) -> bool:
+    """Check if architecture is CDNA4 (gfx95*, e.g. MI350 series).
+
+    CDNA4 adds instructions absent on earlier CDNA (K=32/16 f16/bf16 MFMA,
+    128-bit ``buffer_load_dwordx4_lds``, HW LDS-transpose reads, MX/scaled
+    MFMA). Gate CDNA4-only paths on this rather than an ``!= "gfx942"`` else
+    branch, so CDNA2 (gfx90a) falls back to the CDNA3-safe path.
+
+    If arch is None, the current GPU arch is auto-detected.
+    """
+    if arch is None:
+        arch = get_rocm_arch()
+    if not arch:
+        return False
+    return arch.lower().startswith("gfx95")

@@ -46,7 +46,7 @@ from flydsl._mlir.dialects import fly, llvm, memref, scf
 from flydsl.compiler.kernel_function import CompilationContext
 from flydsl.expr import arith, const_expr, gpu, range_constexpr, rocdl, vector
 from flydsl.expr.typing import T
-from flydsl.runtime.device import get_rocm_arch
+from flydsl.runtime.device import get_rocm_arch, is_cdna4
 from flydsl.utils.smem_allocator import SmemAllocator, SmemPtr
 from kernels.common.kernels_common import get_llvm_ptr
 from kernels.common.tensor_shim import GTensor, STensor, _to_raw, get_dtype_in_kernel
@@ -389,8 +389,10 @@ def compile_small_m_hgemm_kernel(
         raise ValueError(f"SPLIT_K must be >= 1, got {SPLIT_K}")
 
     GPU_ARCH = get_rocm_arch()
-    if GPU_ARCH == "gfx942":
-        raise ValueError("small-M kernel currently targets the async-copy bf16 path")
+    # This kernel uses the CDNA4 K=32 MFMA + 16B async-copy path; every earlier
+    # CDNA (gfx942, gfx90a, ...) lacks those instructions.
+    if not is_cdna4(GPU_ARCH):
+        raise ValueError(f"small-M kernel currently targets the CDNA4 (gfx95*) async-copy bf16 path, got {GPU_ARCH!r}")
 
     WMMA_IMPL = WmmaHalf_m16n16k32(dtype)
     DMA_BYTES = 16

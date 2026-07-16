@@ -161,8 +161,8 @@ def build_flash_attn_func_module_primary(
     BLOCK_N_OUT = 128 if PATH_TAG == "N128" else BLOCK_N
     N_SUBTILES = BLOCK_N_OUT // BLOCK_N
     ENABLE_PREFETCH_3BUF = os.getenv("FLYDSL_FLASH_ATTN_FUNC_ENABLE_PREFETCH3", "0") == "1"
-    # buffer_load_dwordx4_lds (16B DMA-to-LDS) requires gfx950+; gfx94x only has dword (4B).
-    _has_lds_load_b128 = not gpu_arch.startswith("gfx942")
+    # buffer_load_dwordx4_lds (16B DMA-to-LDS) requires gfx950+; earlier CDNA (gfx94x, gfx90a) only has dword (4B).
+    _has_lds_load_b128 = gpu_arch.startswith("gfx950")
     ENABLE_DMA = _has_lds_load_b128 and (
         PATH_TAG == "N128" or (os.getenv("FLYDSL_FLASH_ATTN_FUNC_ENABLE_DMA", "0") == "1")
     )
