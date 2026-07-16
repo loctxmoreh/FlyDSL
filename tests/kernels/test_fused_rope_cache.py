@@ -105,7 +105,9 @@ BLOCK_SIZE = 16
 # cvt_pk_fp8_f32 produces a different bit encoding on RDNA, so fp8 cache tests
 # are skipped there to avoid false failures from dtype mismatches.
 _ARCH = str(_get_rocm_arch())
-_IS_RDNA = not _ARCH.startswith("gfx9")
+# fp8 KV cache needs native FP8 cvt (cvt_pk_fp8_f32): CDNA3+ (gfx94x/gfx95x).
+# gfx90a (CDNA2) has no FP8; RDNA fp8 uses a different bit encoding.
+_NO_FP8_KVCACHE = not (_ARCH.startswith("gfx94") or _ARCH.startswith("gfx95"))
 FP8_DTYPE = torch.float8_e4m3fn if "gfx95" in _ARCH else torch.float8_e4m3fnuz
 MAX_POS = 8192
 X_SIZE = 16  # x-pack factor in non-flash key cache layout
@@ -699,9 +701,9 @@ def test_negative_slots(num_tokens, flash_layout):
 
 
 @pytest.mark.skipif(
-    _IS_RDNA,
-    reason="fp8 KV cache is a CDNA production feature; "
-    "cvt_pk_fp8_f32 bit encoding differs on RDNA (gfx10xx/gfx11xx/gfx12xx)",
+    _NO_FP8_KVCACHE,
+    reason="fp8 KV cache needs native FP8 cvt_pk_fp8_f32 (gfx94x/gfx95x); "
+    "absent on gfx90a (CDNA2), and bit encoding differs on RDNA (gfx10xx/gfx11xx/gfx12xx)",
 )
 @pytest.mark.parametrize("num_tokens", [1, 32])
 @pytest.mark.parametrize("flash_layout", [True, False], ids=["flash", "nonflash"])
