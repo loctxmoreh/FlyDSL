@@ -98,6 +98,9 @@ def test_mfma_flyc_splitk_hgemm(
     bench_warmup: int = DEFAULT_BENCH_WARMUP,
 ):
     global ARCH
+    # gfx942/gfx950 only: async buffer_load_lds and the split-K epilogue use sc0/sc1
+    # system-scope cache modifiers (gfx942+ syntax); gfx90a (CDNA2) uses glc/slc and
+    # has no sc1 equivalent, so this kernel needs a separate CDNA2 port.
     if ARCH not in ["gfx950", "gfx942"]:
         pytest.skip(f"Skip hgemm test: ARCH={ARCH}")
 

@@ -329,8 +329,9 @@ def test_v2_preshuffle_c_store_oob(in_dtype):
     harness fills guard rows past M with a sentinel and asserts none were
     overwritten (in addition to verifying the in-range output).
     """
-    if get_rocm_arch() not in ("gfx942", "gfx950"):
-        pytest.skip(f"v2 preshuffle GEMM requires gfx942/gfx950, got {get_rocm_arch()}")
+    # f16/bf16 run on any CDNA (incl. gfx90a); the inner test skips fp8/int8 where unsupported.
+    if not str(get_rocm_arch()).startswith("gfx9"):
+        pytest.skip(f"v2 preshuffle GEMM requires CDNA (gfx9xx), got {get_rocm_arch()}")
     test_mfma_a8_flyc_preshuffle(
         in_dtype,
         M=33,
