@@ -153,6 +153,13 @@ def compile_preshuffle_gemm(
     gpu_arch = get_rocm_arch()
     is_gfx942 = str(gpu_arch).startswith("gfx942")
     is_gfx950 = str(gpu_arch).startswith("gfx950")
+    # The 8-bit path uses K=32 MFMA (fp8 or i8), available only on CDNA3+
+    # (gfx942/gfx950). Earlier CDNA (gfx90a/gfx908) would build an atom the
+    # hardware cannot run -> GPU fault at dispatch; fail fast instead.
+    if is_8bit and not (is_gfx942 or is_gfx950):
+        raise ValueError(
+            f"preshuffle GEMM in_dtype={in_dtype!r} (8-bit) requires K=32 MFMA (gfx942/gfx950), got {gpu_arch!r}"
+        )
     use_mfma_scale_128 = is_fp8 and is_gfx950 and (tile_k % 128 == 0)
     use_mfma_k32 = is_f16_or_bf16 and is_gfx950
 
