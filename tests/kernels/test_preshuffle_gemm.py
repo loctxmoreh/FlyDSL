@@ -162,9 +162,10 @@ def test_mfma_a8_flyc_preshuffle(
     if use_async_copy and in_dtype not in ("fp8", "int8"):
         pytest.skip("async copy (buffer_load_lds) only supports 8-bit inputs (fp8/int8)")
     _arch = str(get_rocm_arch())
-    if in_dtype in ("fp8", "int8") and not (_arch.startswith("gfx942") or _arch.startswith("gfx950")):
-        # 8-bit path uses K=32 MFMA (fp8/i8), a CDNA3+ instruction; gfx90a/gfx908 lack it.
-        pytest.skip(f"8-bit (fp8/int8) preshuffle GEMM requires gfx942/gfx950 K=32 MFMA, not {_arch}")
+    if in_dtype == "fp8" and not (_arch.startswith("gfx942") or _arch.startswith("gfx950")):
+        # fp8 MFMA is CDNA3+ only; gfx90a/gfx908 have no FP8 hardware. (int8 runs on
+        # all CDNA — gfx90a uses the K=16 i8 MFMA path.)
+        pytest.skip(f"fp8 preshuffle GEMM requires gfx942/gfx950 FP8 MFMA, not {_arch}")
     print("=" * 80)
     print(f"[flyc] MFMA {in_dtype.upper()} GEMM Test (Tile: {tile_m}x{tile_n}x{tile_k})")
     print("=" * 80)

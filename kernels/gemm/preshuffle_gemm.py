@@ -153,12 +153,12 @@ def compile_preshuffle_gemm(
     gpu_arch = get_rocm_arch()
     is_gfx942 = str(gpu_arch).startswith("gfx942")
     is_gfx950 = str(gpu_arch).startswith("gfx950")
-    # The 8-bit path uses K=32 MFMA (fp8 or i8), available only on CDNA3+
-    # (gfx942/gfx950). Earlier CDNA (gfx90a/gfx908) would build an atom the
-    # hardware cannot run -> GPU fault at dispatch; fail fast instead.
-    if is_8bit and not (is_gfx942 or is_gfx950):
+    # FP8 MFMA is CDNA3+ only (gfx942/gfx950); earlier CDNA (gfx90a/gfx908) has no
+    # FP8 and would fault the GPU. int8 runs on all CDNA (K=32 on gfx942/gfx950,
+    # K=16 i8 MFMA on gfx90a).
+    if is_fp8 and not (is_gfx942 or is_gfx950):
         raise ValueError(
-            f"preshuffle GEMM in_dtype={in_dtype!r} (8-bit) requires K=32 MFMA (gfx942/gfx950), got {gpu_arch!r}"
+            f"preshuffle GEMM in_dtype={in_dtype!r} (fp8) requires FP8 MFMA (gfx942/gfx950), got {gpu_arch!r}"
         )
     use_mfma_scale_128 = is_fp8 and is_gfx950 and (tile_k % 128 == 0)
     use_mfma_k32 = is_f16_or_bf16 and is_gfx950
@@ -694,8 +694,14 @@ def compile_preshuffle_gemm(
             mma_atom = fx.make_mma_atom(fx.rocdl.MFMA(16, 16, 16, layout_elem))
             k_perm = fx.make_layout((4, 4, 2), (1, 8, 4))
         elif const_expr(is_int8):
-            mma_atom = fx.make_mma_atom(fx.rocdl.MFMA(16, 16, 32, layout_elem, Int32))
-            k_perm = fx.make_layout((8, 4, 2), (1, 16, 8))
+            if const_expr(is_gfx942 or is_gfx950):
+                mma_atom = fx.make_mma_atom(fx.rocdl.MFMA(16, 16, 32, layout_elem, Int32))
+                k_perm = fx.make_layout((8, 4, 2), (1, 16, 8))
+            else:
+                # gfx90a (CDNA2): K=16 i8 MFMA. Same 64-wide preshuffle-K tile as
+                # K=32 but 4 MFMA substeps of 16 (KPerThread=4) instead of 2 of 32.
+                mma_atom = fx.make_mma_atom(fx.rocdl.MFMA(16, 16, 16, layout_elem, Int32))
+                k_perm = fx.make_layout((4, 4, 4), (1, 16, 4))
         else:
             # fp8: narrow atom here; the scale (16x16x128) tiled_mma is rebuilt in-kernel
             mma_atom = fx.make_mma_atom(fx.rocdl.MFMA(16, 16, 32, layout_elem))
