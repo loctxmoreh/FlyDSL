@@ -166,6 +166,7 @@ helper code that is not part of the traced closure.
 
 | Arch | Chips | Wave size | MMA path | Notes |
 |---|---|---|---|---|
+| `gfx90a` | MI250 / MI250X | 64 | MFMA | **Experimental — `dev/gfx90a` branch, NOT in the official support matrix (CDNA3+).** CDNA2. Works: f16/bf16/f32 MFMA GEMM (preshuffle + OOB variant), f16/bf16 MoE with f16 output, norm/softmax/RoPE, tiled copy/MMA. Fail-fast / unsupported: FP8 & FP4/MX (no hardware), K=32/16 f16/bf16 MFMA + 128b `buffer_load_dwordx4_lds` (CDNA4), int8 GEMM (needs K=16/8 i8 MFMA atoms) and split-K HGEMM (`sc0`/`sc1` system-scope modifiers) — see [`TODO.md`](TODO.md). `is_rdna_arch()` False, wave64. Full boundary: [`SUPPORT_GFX90A.md`](SUPPORT_GFX90A.md). |
 | `gfx942` | MI300X / MI308X | 64 | MFMA | CDNA3 baseline; preshuffle GEMM, PA decode, CDNA BufferCopy |
 | `gfx950` / `gfx95*` | MI350 / MI355X | 64 | MFMA | CDNA4 path; FP4, MFMA scale, wider LDS copy paths, 160KB LDS |
 | `gfx11*` | RDNA3 / RDNA3.5 (Strix Halo, e.g. gfx1151) | 32 | WMMA | No MFMA; f16/bf16 (and i8/i4) WMMA GEMM; legacy v16-operand WMMA ABI; **no native FP8** (kernels fail-fast); `kernels/rdna3_f16_gemm.py`. `is_rdna_arch()` returns True. |

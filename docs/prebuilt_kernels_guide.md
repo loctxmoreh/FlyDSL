@@ -14,6 +14,26 @@
 
 > **Note on API styles**: All kernels use the `@flyc.kernel`/`@flyc.jit` API from `flydsl.compiler` and `flydsl.expr` (`python/flydsl/`).
 
+### gfx90a (CDNA2 / MI250) compatibility — experimental
+
+gfx90a is **not** in the official support matrix (CDNA3+), but the `dev/gfx90a` branch enables a
+safe subset. Every unsupported path fails fast with a clear error or is skipped — none silently
+miscompiles or faults the GPU.
+
+| Kernel / dtype on gfx90a | Status |
+|---|---|
+| LayerNorm / RMSNorm / Softmax (f32, f16, bf16) | ✅ Works |
+| Preshuffle GEMM — **f16, bf16** | ✅ Works (K=16 MFMA path) |
+| MoE 2-stage GEMM — **f16/bf16, f16 output** | ✅ Works |
+| RoPE / KV-cache (bf16, f16) | ✅ Works |
+| Preshuffle / MoE GEMM — **fp8** | ⛔ Fail-fast (no FP8 MFMA hardware) |
+| Preshuffle / MoE GEMM — **int8** | ⛔ Fail-fast (needs K=16/8 i8 MFMA atoms — planned, see [`TODO.md`](../TODO.md)) |
+| MoE GEMM — **bf16 output** | ⛔ Fail-fast (no packed bf16 global atomic) |
+| FP4 / MX-scaled GEMM, FlashAttention fp8, LDS-transpose (CDNA4) | ⛔ Fail-fast / skipped (CDNA4-only) |
+| Split-K HGEMM (`hgemm_splitk` family) | ⛔ gfx942/gfx950 only (`sc0`/`sc1` system-scope — planned, see [`TODO.md`](../TODO.md)) |
+
+Boundary details and bring-up plan: [`SUPPORT_GFX90A.md`](../SUPPORT_GFX90A.md).
+
 ---
 
 ## 1. Normalization Kernels
