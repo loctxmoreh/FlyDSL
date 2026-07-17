@@ -123,8 +123,12 @@ static Type getMfmaABType(MLIRContext *ctx, Type elemTy, int32_t mn, int32_t k =
     }
     return VectorType::get({vecSize}, elemTy);
   }
-  if (elemTy.getIntOrFloatBitWidth() == 8)
-    return IntegerType::get(ctx, 64);
+  if (elemTy.getIntOrFloatBitWidth() == 8) {
+    // Pack the per-lane 8-bit operands into a single integer. K=32/16 tiles
+    // hold 8 elems (i64, gfx942+ fp8/i8); K=16/8 tiles hold 4 (i32, gfx90a i8).
+    int numElems = mn * k / 64;
+    return IntegerType::get(ctx, numElems * 8);
+  }
   return nullptr;
 }
 
@@ -209,6 +213,9 @@ FailureOr<Value> MmaOpCDNA3_MFMAType::emitAtomCallSSA(OpBuilder &builder, Locati
 
   DISPATCH_MFMA_SSA(16, 32, elemTyA.isInteger(8) && elemTyB.isInteger(8), mfma_i32_16x16x32_i8)
   DISPATCH_MFMA_SSA(32, 16, elemTyA.isInteger(8) && elemTyB.isInteger(8), mfma_i32_32x32x16_i8)
+  // gfx90a (CDNA2) i8 MFMA: narrower K (4 packed i8 → i32 operands).
+  DISPATCH_MFMA_SSA(16, 16, elemTyA.isInteger(8) && elemTyB.isInteger(8), mfma_i32_16x16x16i8)
+  DISPATCH_MFMA_SSA(32, 8, elemTyA.isInteger(8) && elemTyB.isInteger(8), mfma_i32_32x32x8i8)
 
 #undef DISPATCH_MFMA_SSA
 
