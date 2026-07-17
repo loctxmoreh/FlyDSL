@@ -32,7 +32,7 @@ miscompiles or faults the GPU.
 | FP4 / MX-scaled GEMM, FlashAttention fp8, LDS-transpose (CDNA4) | ⛔ Fail-fast / skipped (CDNA4-only) |
 | Split-K HGEMM (`hgemm_splitk` family) | ⛔ gfx942/gfx950 only (`sc0`/`sc1` system-scope — planned, see [`TODO.md`](../TODO.md)) |
 
-Boundary details and bring-up plan: [`SUPPORT_GFX90A.md`](../SUPPORT_GFX90A.md).
+Status & triage: [`gfx90a_triage.md`](gfx90a_triage.md); deferred follow-ups: [`../TODO.md`](../TODO.md).
 
 ---
 

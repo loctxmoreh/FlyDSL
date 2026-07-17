@@ -1,8 +1,9 @@
 # gfx90a (CDNA2 / MI250) — Follow-up TODO
 
-Living tracker for deferred gfx90a bring-up work. Scope/rationale live in the frozen
-[`SUPPORT_GFX90A.md`](SUPPORT_GFX90A.md); Tiers 0 and 1 are implemented on `dev/gfx90a`.
-These two items are the porting efforts explicitly deferred out of Tier 1.
+Living tracker for deferred gfx90a bring-up work. The bring-up (safety guards, supported-path
+enablement, docs, and a local CI gate) is implemented on `dev/gfx90a`; validated test status is in
+[`docs/gfx90a_triage.md`](docs/gfx90a_triage.md). These two items are the porting efforts explicitly
+deferred out of that work.
 
 ---
 
@@ -55,21 +56,3 @@ accumulation coherence relies on that scope, so a naive swap risks data races.
 
 **Acceptance:** `test_hgemm_splitk` un-gated for gfx90a, f16/bf16 cases match reference, split-K
 accumulation is race-free under stress.
-
----
-
-## Relationship to the plan's Tier 2 (Validation / CI / Docs)
-
-**Tier 2 does NOT depend on either item — it can start now.** Tier 2 documents and validates the
-*current* state; these two items are future enhancements that would later move int8 and split-K
-from "unsupported/fail-fast" to "supported":
-
-- **T2.1 (full-suite triage):** run now; the pass/skip/known-fail table records int8 and split-K as
-  known gaps (links here). Re-run after each item lands.
-- **T2.2 (gfx90a CI tier):** set up now over the *already-supported* subset (f16/bf16 GEMM/MoE, norm,
-  rope, examples). New items just add cases later.
-- **T2.3 (docs / support table):** write now, listing int8 GEMM and split-K HGEMM as "planned"
-  (link here) rather than silently omitting them.
-
-Only the *contents* couple loosely (a doc row / a CI case flips from "planned" to "supported" when an
-item lands) — there is no hard ordering. Start Tier 2 immediately.
