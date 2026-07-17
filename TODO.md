@@ -7,30 +7,20 @@ deferred out of that work.
 
 ---
 
-## 1. Enable int8 GEMM on gfx90a
+## 1. Enable int8 GEMM on gfx90a — DONE ✅
 
-**Status:** atom DONE ✅; production preshuffle wiring remaining.
+**The K=16/K=8 i8 MFMA atoms** (commit `18d1568`): `mfma_i32_16x16x16i8` / `mfma_i32_32x32x8i8` added
+to the CDNA3 lowering (`getMfmaABType` packs 4 i8 → i32 for these; ThrVal/acc/verify were already
+K-parametric; `MFMA(m,n,k,Int8,Int32)` builds them, no binding change). FileCheck
+`tests/mlir/Conversion/mma_atom_i8_cdna2.mlir` + numeric `tests/kernels/test_i8_mma_gfx90a.py`.
 
-**Done — the K=16/K=8 i8 MFMA atoms** (commit `18d1568`): `mfma_i32_16x16x16i8` (K=16) and
-`mfma_i32_32x32x8i8` (K=8) added to the CDNA3 lowering (`getMfmaABType` now packs 4 i8 → i32 for
-these; ThrVal/acc/verify were already K-parametric). No Python-binding change needed —
-`MFMA(m,n,k,Int8,Int32)` builds them directly. Verified by FileCheck
-(`tests/mlir/Conversion/mma_atom_i8_cdna2.mlir`) and a numeric single-tile GEMM on MI250
-(`tests/kernels/test_i8_mma_gfx90a.py` — both K=16 and K=8 match the int32 reference). So int8 GEMM
-via the tiled-MMA API works on gfx90a today. (fp8 stays out permanently — no FP8 hardware.)
-
-**Remaining — wire the K=16 atom into the production `preshuffle_gemm` kernel.** A drop-in atom swap
-does NOT work: the int8 path's `k_perm=(8,4,2)/(1,16,8)`, `tile_K_perm=64`, and the
-`k_coord=(None, ki)` fragment indexing (`kernels/gemm/preshuffle_gemm.py` ~L175, L468-471, L696-698)
-are all coupled to K=32. A K=16 atom changes the fragment K-decomposition — an experiment hit a
-compile-time `profile mismatch` (`int_tuple<(*,*,(*,0))>` vs the K=16 fragment `(4,2,(2,2,8))`). The
-work is: derive a K=16-correct `k_perm` + matching host `shuffle_weight` layout + `k_coord` indexing,
-verified numerically against torch. Then relax the `is_8bit`→`is_fp8` guard
-(`preshuffle_gemm.py` ~L159) and the test skip (`test_preshuffle_gemm.py` ~L165) for int8.
-
-**Effort:** medium (focused layout work on one kernel; the atom + guards are done).
-
-**Acceptance:** `test_preshuffle_gemm` int8 cases match the torch reference on gfx90a and pass.
+**Production preshuffle wiring** (commit `421e63f`): the int8 path now branches on arch — gfx942/gfx950
+keep K=32 MFMA (`k_perm=(8,4,2)/(1,16,8)`), gfx90a uses K=16 (`k_perm=(4,4,4)/(1,16,4)`), i.e. the same
+64-wide preshuffle-K tile run as 4 MFMA substeps of 16 (KPerThread=4) instead of 2 of 32. Derived from
+the shared `(KPerThread, 4, substeps)/(1, KPerThread*substeps, KPerThread)` structure; `k_coord=(None,
+ki)` unchanged (the tiled_mma expands substeps). Guard relaxed to fp8-only; int8 un-skipped in the test.
+Verified on MI250: `test_preshuffle_gemm` int8 matches torch across small + large shapes, eager + graph
+(f16/bf16 unregressed); CI gate green (1048 passed). fp8 stays out permanently — no FP8 hardware.
 
 ---
 
