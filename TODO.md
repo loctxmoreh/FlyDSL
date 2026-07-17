@@ -9,26 +9,28 @@ deferred out of that work.
 
 ## 1. Enable int8 GEMM on gfx90a
 
-**Status:** not started. Currently fail-fasts (Tier 0 guard) + test-skips.
+**Status:** atom DONE ✅; production preshuffle wiring remaining.
 
-**Why deferred:** the CDNA3 C++ lowering only emits i8 MFMA at K=32 / K=16
-(`mfma_i32_16x16x32_i8`, `mfma_i32_32x32x16_i8` — both gfx942+). gfx90a's valid i8 MFMA
-(`mfma_i32_16x16x16_i8`, `mfma_i32_32x32x8_i8`, K=16/8) are **not in the dispatch at all**.
-(fp8 is out of scope permanently — gfx90a has no FP8 hardware.)
+**Done — the K=16/K=8 i8 MFMA atoms** (commit `18d1568`): `mfma_i32_16x16x16i8` (K=16) and
+`mfma_i32_32x32x8i8` (K=8) added to the CDNA3 lowering (`getMfmaABType` now packs 4 i8 → i32 for
+these; ThrVal/acc/verify were already K-parametric). No Python-binding change needed —
+`MFMA(m,n,k,Int8,Int32)` builds them directly. Verified by FileCheck
+(`tests/mlir/Conversion/mma_atom_i8_cdna2.mlir`) and a numeric single-tile GEMM on MI250
+(`tests/kernels/test_i8_mma_gfx90a.py` — both K=16 and K=8 match the int32 reference). So int8 GEMM
+via the tiled-MMA API works on gfx90a today. (fp8 stays out permanently — no FP8 hardware.)
 
-**Surface of change:**
-- `lib/Dialect/FlyROCDL/CDNA3/MmaAtom.cpp:210-211` — add K=16/8 i8 dispatch entries.
-- `python/flydsl/expr/rocdl/__init__.py` — add the `mfma_i32_16x16x16_i8` / `32x32x8_i8`
-  bindings if the ROCDL op wrappers are missing.
-- `kernels/gemm/preshuffle_gemm.py` — add a K=16 int8 path for gfx90a (tile-K micro-step,
-  MMA operand + LDS register layouts differ from K=32); relax the `is_8bit` guard to allow
-  int8 on gfx90a once the K=16 path exists (keep fp8 rejected).
-- `tests/kernels/test_preshuffle_gemm.py:165` — allow int8 on gfx90a in the skip predicate.
+**Remaining — wire the K=16 atom into the production `preshuffle_gemm` kernel.** A drop-in atom swap
+does NOT work: the int8 path's `k_perm=(8,4,2)/(1,16,8)`, `tile_K_perm=64`, and the
+`k_coord=(None, ki)` fragment indexing (`kernels/gemm/preshuffle_gemm.py` ~L175, L468-471, L696-698)
+are all coupled to K=32. A K=16 atom changes the fragment K-decomposition — an experiment hit a
+compile-time `profile mismatch` (`int_tuple<(*,*,(*,0))>` vs the K=16 fragment `(4,2,(2,2,8))`). The
+work is: derive a K=16-correct `k_perm` + matching host `shuffle_weight` layout + `k_coord` indexing,
+verified numerically against torch. Then relax the `is_8bit`→`is_fp8` guard
+(`preshuffle_gemm.py` ~L159) and the test skip (`test_preshuffle_gemm.py` ~L165) for int8.
 
-**Effort:** medium-high (new atom op via `/add-target-atom-op` + kernel retune + numeric verify).
+**Effort:** medium (focused layout work on one kernel; the atom + guards are done).
 
-**Acceptance:** an int8 preshuffle GEMM case matches the torch reference on gfx90a; no core dump;
-test collects and passes.
+**Acceptance:** `test_preshuffle_gemm` int8 cases match the torch reference on gfx90a and pass.
 
 ---
 

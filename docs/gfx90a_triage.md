@@ -26,8 +26,9 @@ Every skip/fail-fast names gfx90a and the missing feature. Main categories:
 
 - **FP8 GEMM / MoE / attention** — no FP8 MFMA on gfx90a (CDNA3+); kernels raise, tests skip.
 - **FP4 / MX-scaled / CDNA4 transpose** (`ds_read_tr*`, scaled MFMA) — CDNA4-only (gfx950).
-- **int8 GEMM** — needs K=16/8 i8 MFMA atoms not in the CDNA3 lowering — planned, see
-  [`../TODO.md`](../TODO.md).
+- **int8 GEMM** — the K=16/8 i8 MFMA atoms now exist and int8 GEMM works via the tiled-MMA API
+  (`tests/kernels/test_i8_mma_gfx90a.py`); the production `preshuffle_gemm` int8 path still
+  fail-fasts pending a K=16 wiring — see [`../TODO.md`](../TODO.md).
 - **Split-K HGEMM** (`test_hgemm_splitk`) — `sc0`/`sc1` system-scope cache modifiers, gfx942/gfx950
   only — planned, see [`../TODO.md`](../TODO.md).
 - **bf16-output MoE** — no packed bf16 global atomic on gfx90a.
