@@ -624,15 +624,46 @@ public:
   }
 };
 
+// Emit-time capability guard: reject an MFMA the target chip cannot run, with a
+// clear diagnostic, instead of emitting an instruction that faults at dispatch.
+// Only enforced for chips known to be a strict subset of the CDNA3 baseline
+// (gfx90a/gfx908 = CDNA2/CDNA1); gfx942/gfx950 have the full set, and an empty
+// chip disables the check (e.g. bare FileCheck runs).
+static LogicalResult checkMmaChipSupport(Operation *op, MmaAtomType mmaTy, StringRef chip) {
+  if (!(chip.starts_with("gfx90a") || chip.starts_with("gfx908")))
+    return success();
+  auto mfma = dyn_cast<fly_rocdl::MmaOpCDNA3_MFMAType>(mmaTy.getMmaOp());
+  if (!mfma)
+    return success();
+  auto isF8 = [](Type t) {
+    return isa<Float8E4M3FNUZType, Float8E5M2FNUZType, Float8E4M3FNType>(t);
+  };
+  if (isF8(mfma.getElemTyA()) || isF8(mfma.getElemTyB()))
+    return op->emitError() << "FP8 MFMA is not available on " << chip
+                           << " (CDNA2); requires gfx942 or newer";
+  // Wide-K MFMA (16x16x32 / 32x32x16 for f16/bf16/i8) is gfx942+. CDNA2 tops out
+  // at K=16 for 16x16 tiles and K=8 for 32x32 tiles (f32 uses smaller K).
+  int m = mfma.getM(), k = mfma.getK();
+  if ((m == 16 && k > 16) || (m == 32 && k > 8))
+    return op->emitError() << "MFMA " << m << "x" << mfma.getN() << "x" << k
+                           << " is not available on " << chip
+                           << " (CDNA2); K exceeds the CDNA2 limit (requires gfx942 or newer)";
+  return success();
+}
+
 class MmaAtomCallLowering : public OpConversionPattern<MmaAtomCall> {
 public:
-  using OpConversionPattern<MmaAtomCall>::OpConversionPattern;
+  MmaAtomCallLowering(const TypeConverter &tc, MLIRContext *ctx, StringRef chip)
+      : OpConversionPattern<MmaAtomCall>(tc, ctx), chip(chip.str()) {}
 
   LogicalResult matchAndRewrite(MmaAtomCall op, OpAdaptor adaptor,
                                 ConversionPatternRewriter &rewriter) const override {
     auto mmaAtomTy = dyn_cast<MmaAtomType>(op.getMmaAtom().getType());
     if (!mmaAtomTy)
       return rewriter.notifyMatchFailure(op, "expected MmaAtomType for mmaAtom operand");
+
+    if (failed(checkMmaChipSupport(op, mmaAtomTy, chip)))
+      return failure();
 
     Location loc = op.getLoc();
 
@@ -660,17 +691,24 @@ public:
     rewriter.eraseOp(op);
     return success();
   }
+
+private:
+  std::string chip;
 };
 
 class MmaAtomCallSSALowering : public OpConversionPattern<MmaAtomCallSSA> {
 public:
-  using OpConversionPattern<MmaAtomCallSSA>::OpConversionPattern;
+  MmaAtomCallSSALowering(const TypeConverter &tc, MLIRContext *ctx, StringRef chip)
+      : OpConversionPattern<MmaAtomCallSSA>(tc, ctx), chip(chip.str()) {}
 
   LogicalResult matchAndRewrite(MmaAtomCallSSA op, OpAdaptor adaptor,
                                 ConversionPatternRewriter &rewriter) const override {
     auto mmaAtomTy = dyn_cast<MmaAtomType>(op.getMmaAtom().getType());
     if (!mmaAtomTy)
       return rewriter.notifyMatchFailure(op, "expected MmaAtomType for mmaAtom operand");
+
+    if (failed(checkMmaChipSupport(op, mmaAtomTy, chip)))
+      return failure();
 
     Location loc = op.getLoc();
     bool hasResult = op.getResults().size() > 0;
@@ -692,6 +730,9 @@ public:
       rewriter.eraseOp(op);
     return success();
   }
+
+private:
+  std::string chip;
 };
 
 /// Lower `gpu.launch_func` kernel operands so that any `!fly.memref` values are
@@ -877,8 +918,9 @@ public:
     patterns.add<MakeCopyAtomOpLowering, MakeMmaAtomOpLowering>(typeConverter, context);
     patterns.add<MakeTiledCopyOpLowering, MakeTiledMmaOpLowering>(typeConverter, context);
     patterns.add<AtomSetValueOpLowering>(typeConverter, context);
-    patterns.add<CopyAtomCallLowering, MmaAtomCallLowering>(typeConverter, context);
-    patterns.add<CopyAtomCallSSALowering, MmaAtomCallSSALowering>(typeConverter, context);
+    patterns.add<CopyAtomCallLowering, CopyAtomCallSSALowering>(typeConverter, context);
+    patterns.add<MmaAtomCallLowering>(typeConverter, context, this->chip);
+    patterns.add<MmaAtomCallSSALowering>(typeConverter, context, this->chip);
     patterns.add<GpuLaunchFuncOpLowering>(typeConverter, context);
 
     // TODO: deprecated in the future

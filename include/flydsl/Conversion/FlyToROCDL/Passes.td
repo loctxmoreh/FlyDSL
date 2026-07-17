@@ -12,6 +12,11 @@ def FlyToROCDLConversionPass : Pass<"convert-fly-to-rocdl"> {
     "LLVM::LLVMDialect",
     "ROCDL::ROCDLDialect"
   ];
+  let options = [
+    Option<"chip", "chip", "std::string", /*default=*/"\"\"",
+           "Target AMDGPU chip (e.g. gfx90a); enables emit-time rejection of "
+           "atoms an earlier-CDNA target cannot run. Empty = no check.">,
+  ];
 }
 
 def FlyROCDLClusterAttrPass : Pass<"fly-rocdl-cluster-attr"> {

@@ -69,7 +69,7 @@ class RocmBackend(BaseBackend):
             "canonicalize",
             "fly-convert-atom-call-to-ssa-form",
             "fly-promote-regmem-to-vectorssa",
-            "convert-fly-to-rocdl",
+            f"convert-fly-to-rocdl{{chip={chip}}}",
             "canonicalize",
             f"gpu.module(convert-scf-to-cf,cse,"
             f"convert-gpu-to-rocdl{{chipset={chip} index-bitwidth=0 runtime=HIP use-bare-ptr-memref-call-conv=true}},"
