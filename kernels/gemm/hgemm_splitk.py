@@ -141,6 +141,25 @@ def compile_hgemm_kernel(
         MFMA_PER_WARP_K = 1
         ASYNC_COPY = True
 
+    # Cache-scope modifiers. CDNA3+ (gfx942/gfx950) uses the sc0/sc1 scope bits;
+    # CDNA2 (gfx90a) uses glc (its assembler rejects sc0/sc1).
+    # NOTE (gfx90a coherence): the split-K reduction relies on cross-CU visibility of
+    # the zero-C / signal / semaphore handshake. On CDNA3 that is `sc0 sc1` (system
+    # scope); on gfx90a we use `glc` (device/L2 scope). This is correct ONLY because a
+    # single MI250 GCD shares one L2 across all CUs and the split-K grid runs on one
+    # device, so an L2-visible store/load is cross-CU coherent. If a coherence race is
+    # ever observed here, escalate `glc` -> `"glc slc"` (also bypass L2 to system scope).
+    _use_sc = GPU_ARCH.startswith("gfx942") or GPU_ARCH.startswith("gfx95")
+    _sc_store = "sc0 sc1" if _use_sc else "glc"
+    _sc_load = "sc1" if _use_sc else "glc"
+    _dma_mod = "sc0 " if _use_sc else ""  # gmem->LDS input DMA needs no coherence
+    # Split-K accumulates through a packed global atomic add. gfx90a has pk_add_f16
+    # but not pk_add_bf16 (CDNA3+), so bf16 split-K (SPLIT_K>1) is unsupported there.
+    if IS_SPLIT_K and dtype == "bf16" and not _use_sc:
+        raise ValueError(
+            f"bf16 split-K (SPLIT_K>1) needs packed bf16 atomics (gfx942+); got {GPU_ARCH!r}. " "Use fp16 or SPLIT_K=1."
+        )
+
     # Fixed parameters:
     WARP_SIZE = 64
     DTYPE_BYTES = 2
@@ -309,7 +328,7 @@ def compile_hgemm_kernel(
                         llvm.InlineAsmOp(
                             None,
                             [c_ptr, init_vec],
-                            "global_store_dwordx4 $0, $1, off sc0 sc1",
+                            f"global_store_dwordx4 $0, $1, off {_sc_store}",
                             "v,v",
                             has_side_effects=True,
                         )
@@ -322,7 +341,7 @@ def compile_hgemm_kernel(
                     llvm.InlineAsmOp(
                         None,
                         [signal_ptr, arith.constant(1, type=T.i32)],
-                        "global_store_dword $0, $1, off sc0 sc1",
+                        f"global_store_dword $0, $1, off {_sc_store}",
                         "v,v",
                         has_side_effects=True,
                     )
@@ -348,7 +367,7 @@ def compile_hgemm_kernel(
                     data = llvm.InlineAsmOp(
                         T.i32,
                         [signal_ptr],
-                        "global_load_dword $0, $1, off sc1",
+                        f"global_load_dword $0, $1, off {_sc_load}",
                         "=v,v",
                         has_side_effects=True,
                     ).result
@@ -405,11 +424,11 @@ def compile_hgemm_kernel(
 
         def buffer_load_lds_inline(rsrc, lds_ptr, global_offset):
             if const_expr(DMA_BYTES == 16):
-                asm = "s_mov_b32 m0, $0\n\tbuffer_load_dwordx4 $1, $2, 0 offen sc0 lds"
+                asm = f"s_mov_b32 m0, $0\n\tbuffer_load_dwordx4 $1, $2, 0 offen {_dma_mod}lds"
             elif const_expr(DMA_BYTES == 8):
-                asm = "s_mov_b32 m0, $0\n\tbuffer_load_dwordx2 $1, $2, 0 offen sc0 lds"
+                asm = f"s_mov_b32 m0, $0\n\tbuffer_load_dwordx2 $1, $2, 0 offen {_dma_mod}lds"
             elif const_expr(DMA_BYTES == 4):
-                asm = "s_mov_b32 m0, $0\n\tbuffer_load_dword $1, $2, 0 offen sc0 lds"
+                asm = f"s_mov_b32 m0, $0\n\tbuffer_load_dword $1, $2, 0 offen {_dma_mod}lds"
             else:
                 raise NotImplementedError(f"DMA_BYTES={DMA_BYTES} not supported")
             llvm.InlineAsmOp(None, [lds_ptr, global_offset, rsrc], asm, "s,v,s", has_side_effects=True)

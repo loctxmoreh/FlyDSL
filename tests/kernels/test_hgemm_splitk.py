@@ -98,11 +98,13 @@ def test_mfma_flyc_splitk_hgemm(
     bench_warmup: int = DEFAULT_BENCH_WARMUP,
 ):
     global ARCH
-    # gfx942/gfx950 only: async buffer_load_lds and the split-K epilogue use sc0/sc1
-    # system-scope cache modifiers (gfx942+ syntax); gfx90a (CDNA2) uses glc/slc and
-    # has no sc1 equivalent, so this kernel needs a separate CDNA2 port.
-    if ARCH not in ["gfx950", "gfx942"]:
+    if ARCH not in ["gfx950", "gfx942", "gfx90a"]:
         pytest.skip(f"Skip hgemm test: ARCH={ARCH}")
+    # gfx90a (CDNA2) has no packed bf16 atomic (pk_add_bf16 is gfx942+), which the
+    # split-K accumulation needs; f16 (pk_add_f16) works, and bf16 SPLIT_K=1 uses a
+    # plain store. So bf16 split-K is unsupported on gfx90a.
+    if ARCH == "gfx90a" and dtype == "bf16" and SPLIT_K > 1:
+        pytest.skip("bf16 split-K (SPLIT_K>1) needs packed bf16 atomics (gfx942+), not on gfx90a")
 
     print("=" * 80)
     print(f"[flyc] MFMA {dtype.upper()} SplitK-HGEMM Test")
