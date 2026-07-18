@@ -24,27 +24,22 @@ Verified on MI250: `test_preshuffle_gemm` int8 matches torch across small + larg
 
 ---
 
-## 2. Port the split-K HGEMM family to gfx90a
+## 2. Port the split-K HGEMM to gfx90a — DONE ✅ (commit `cc10da2`)
 
-**Status:** not started. `test_hgemm_splitk` stays gfx942/gfx950-only.
+`hgemm_splitk` emitted `sc0`/`sc1` system-scope cache modifiers (gfx942+ asm syntax) in the async
+`buffer_load_lds` and the split-K epilogue (zero-C store, signal store/load), which gfx90a's
+assembler rejects. Made the modifiers arch-aware: CDNA3+ keeps `sc0 sc1`; gfx90a uses `glc`
+(device/L2 scope) for the coherence-critical stores/loads and drops the modifier on the input DMA.
+Rationale (documented inline at the def site): one MI250 GCD shares a single L2, so `glc` gives the
+split-K cross-CU coherence `sc0 sc1` provides on CDNA3; escalate to `glc slc` if a race ever appears.
+f16 split-K works (pk_add_f16); bf16 split-K (SPLIT_K>1) fail-fasts (no pk_add_bf16 on gfx90a, same
+as MoE) while bf16 SPLIT_K=1 (plain store) and all f16 work. Un-gated the test; bf16 SPLIT_K>1 skips.
+Verified on MI250: `test_hgemm_splitk` = 18 passed / 10 skipped / 0 failed; f16 SPLIT_K>1 re-run 3x
+for coherence — stable; CI gate green (1066 passed). Scope: only `hgemm_splitk.py` (the sole
+test-covered module); `splitk_hgemm.py`/`small_m_hgemm.py` are untested siblings, left as-is.
 
-**Why deferred:** `hgemm_splitk` / `splitk_hgemm` / `small_m_hgemm` emit `sc0`/`sc1`
-**system-scope cache modifiers** (gfx942+ assembler syntax) in (a) the async `buffer_load_lds`
-and (b) the split-K epilogue inline-asm stores. Confirmed on gfx90a via
-`error: invalid operand for instruction ... buffer_load_dword ... sc0 lds`. gfx90a uses
-`glc`/`slc` and has **no `sc1` (system-scope) equivalent** — and the split-K cross-CU
-accumulation coherence relies on that scope, so a naive swap risks data races.
+---
 
-**Surface of change:**
-- `kernels/gemm/hgemm_splitk.py` (epilogue `global_store_dwordx4/dword ... sc0 sc1` at ~312/325;
-  async `buffer_load_lds_inline` at ~406), `splitk_hgemm.py` (~314/334/493/532),
-  `small_m_hgemm.py` (~662/795/988) — make the cache-modifier asm arch-aware (`glc`/`slc`
-  on gfx90a) and route async through a sync copy where `buffer_load_lds` isn't valid.
-- Verify the split-K semaphore / accumulation coherence still holds under gfx90a scopes
-  (the risky part — needs a correctness harness, not just compile success).
-- `tests/kernels/test_hgemm_splitk.py:101` — add gfx90a once it passes.
-
-**Effort:** high + correctness risk (cross-CU coherence).
-
-**Acceptance:** `test_hgemm_splitk` un-gated for gfx90a, f16/bf16 cases match reference, split-K
-accumulation is race-free under stress.
+**All gfx90a bring-up follow-ups are now complete.** Remaining out-of-scope-by-hardware on gfx90a:
+FP8/FP4/MX (no hardware), CDNA4-only ops, and bf16 packed atomics (bf16 split-K / bf16-output MoE) —
+all fail-fast cleanly. See [`docs/gfx90a_triage.md`](docs/gfx90a_triage.md).

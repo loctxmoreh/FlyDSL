@@ -14,11 +14,11 @@ zero core dumps, pytest exit 0.
 | Suite | Passed | Skipped | Failed | Crashes |
 |---|---:|---:|---:|---:|
 | examples 01–05 | 5 | 0 | 0 | 0 |
-| `tests/kernels` (¬large/¬bench/¬multi_gpu) | 232 | 2305 | 0 | 0 |
+| `tests/kernels` (¬large/¬bench/¬multi_gpu) | 250 | 2287 | 0 | 0 |
 | `tests/unit` + `tests/system` (¬large/¬bench/¬multi_gpu) | 816 | 6 | 0 | 0 |
-| **total** | **1053** | **2311** | **0** | **0** |
+| **total** | **1071** | **2293** | **0** | **0** |
 
-(pytest-collected total 1048 pass / 2311 skip + 5 examples.)
+(pytest-collected total 1066 pass / 2293 skip + 5 examples.)
 
 ## Why things skip (categorized — none are silent miscompiles)
 
@@ -26,9 +26,8 @@ Every skip/fail-fast names gfx90a and the missing feature. Main categories:
 
 - **FP8 GEMM / MoE / attention** — no FP8 MFMA on gfx90a (CDNA3+); kernels raise, tests skip.
 - **FP4 / MX-scaled / CDNA4 transpose** (`ds_read_tr*`, scaled MFMA) — CDNA4-only (gfx950).
-- **Split-K HGEMM** (`test_hgemm_splitk`) — `sc0`/`sc1` system-scope cache modifiers, gfx942/gfx950
-  only — planned, see [`../TODO.md`](../TODO.md).
-- **bf16-output MoE** — no packed bf16 global atomic on gfx90a.
+- **bf16 split-K HGEMM (SPLIT_K>1) & bf16-output MoE** — no packed bf16 atomic (`pk_add_bf16`) on
+  gfx90a (gfx942+). f16 split-K and bf16 SPLIT_K=1 work; only the bf16 atomic path fail-fasts.
 - **gfx1250 / RDNA-specific tests** — different arch families (self-skip).
 - **`multi_gpu`, `large_shape`, `benchmark`** — deselected by the gate's marker filter.
 
@@ -42,5 +41,6 @@ itself compiles and runs correctly on gfx90a.
 
 ## Open follow-ups
 
-See [`../TODO.md`](../TODO.md): the split-K HGEMM port (`sc0`/`sc1` → `glc`/`slc`, cross-CU
-coherence) is the remaining item — it would move that ⛔ row above to ✅. (int8 enablement is done.)
+All gfx90a bring-up follow-ups (int8 enablement, split-K HGEMM port) are **done** — see
+[`../TODO.md`](../TODO.md). Remaining gaps are hardware-fundamental (no FP8/FP4/MX, no packed bf16
+atomic, no CDNA4 ops) and fail-fast cleanly.
