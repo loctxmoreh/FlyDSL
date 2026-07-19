@@ -7,8 +7,8 @@
 # gfx90a is NOT in the official support matrix (CDNA3+); this is the dev/gfx90a
 # bring-up gate. The remote repo has no gfx90a CI runner, so run this directly on
 # an MI250 box. It validates the arch-supported subset (examples 01-05 +
-# tests/kernels + tests/unit + tests/system) and asserts pass/skip only — zero
-# core dumps, zero unexpected failures.
+# tests/kernels + tests/unit + tests/system + tests/language) and asserts
+# pass/skip only — zero core dumps, zero unexpected failures.
 #
 # Usage:
 #   bash scripts/ci_gfx90a.sh                 # auto-select emptiest GPU, run gate
@@ -81,10 +81,10 @@ for ex in 01-vectorAdd 02-tiledCopy 03-tiledMma 04-preshuffle_gemm 05-gather_sca
 done
 
 # ── 2. Test suites (supported subset: no large/bench/multi-gpu) ──────────────
-# kernels = device tier; unit/system = host + compile + device tiers.
+# kernels = device tier; unit/system/language = host + compile + device tiers.
 echo ""
-echo "==================== tests/kernels + tests/unit + tests/system ===================="
-timeout 2400 python3 -m pytest tests/kernels/ tests/unit/ tests/system/ \
+echo "==================== tests/kernels + tests/unit + tests/system + tests/language ===================="
+timeout 2400 python3 -m pytest tests/kernels/ tests/unit/ tests/system/ tests/language/ \
     -m "not large_shape and not benchmark and not multi_gpu" \
     -q -p no:cacheprovider --junit-xml="${JUNIT}" 2>&1 | tee "${KLOG}" | grep -ivE "amdgpu.ids" | tail -20
 pytest_rc="${PIPESTATUS[0]}"
