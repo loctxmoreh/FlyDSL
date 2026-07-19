@@ -39,8 +39,8 @@ it two ways: GPU selection uses `rocm-smi` (not torch), and softmax runs a modes
 `ROCDSL_SOFTMAX_SHAPES` so its default ~1 GB shape doesn't trip the quirk. The softmax **kernel**
 itself compiles and runs correctly on gfx90a.
 
-## Open follow-ups
+## Status
 
-All gfx90a bring-up follow-ups (int8 enablement, split-K HGEMM port) are **done** — see
-[`../TODO.md`](../TODO.md). Remaining gaps are hardware-fundamental (no FP8/FP4/MX, no packed bf16
-atomic, no CDNA4 ops) and fail-fast cleanly.
+All gfx90a bring-up work (Tiers 0–2, int8 enablement, split-K HGEMM port) is **complete**.
+Remaining gaps are hardware-fundamental (no FP8/FP4/MX, no packed bf16 atomic, no CDNA4 ops) and
+fail-fast cleanly.

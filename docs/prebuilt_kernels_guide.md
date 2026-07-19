@@ -32,7 +32,7 @@ miscompiles or faults the GPU.
 | **bf16** split-K HGEMM (SPLIT_K>1) & MoE **bf16 output** | ⛔ Fail-fast (no packed bf16 atomic; f16 split-K & bf16 SPLIT_K=1 work) |
 | FP4 / MX-scaled GEMM, FlashAttention fp8, LDS-transpose (CDNA4) | ⛔ Fail-fast / skipped (CDNA4-only) |
 
-Status & triage: [`gfx90a_triage.md`](gfx90a_triage.md); deferred follow-ups: [`../TODO.md`](../TODO.md).
+Status & triage: [`gfx90a_triage.md`](gfx90a_triage.md).
 
 ---
 
